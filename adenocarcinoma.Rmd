@@ -1,0 +1,208 @@
+---
+title: "adenocarcinoma"
+author: "Monisha"
+date: "2023-12-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r loading_all_libraries}
+library(Seurat); library(tidyverse); library(ggplot2)
+```
+
+Sample codes:
+ZC: normal pancreatic tissue
+YF: pancreatic tumors
+ZY: hepatic metastases
+
+
+MERGING GSE152048 and GSE162454
+
+```{r pre_processing_injured}
+
+ac_file_names <- c("GSE197177_RAW/Case1_YF",  
+                   "GSE197177_RAW/Case1_ZY",
+                   "GSE197177_RAW/Case2_YF",
+                   "GSE197177_RAW/Case2_ZY",
+                   "GSE197177_RAW/Case3_YF",
+                   "GSE197177_RAW/Case3_ZY",
+                   "GSE197177_RAW/Case4_ZY")
+
+#Define a list to store Seurat objects
+ac_seurat_objects <- list()
+
+# Create and set up Seurat objects
+for (file_name in ac_file_names) {
+  data <- Seurat::Read10X(data.dir = file_name)
+  ac_seurat_obj <- Seurat::CreateSeuratObject(data, project = file_name, min.cells = 3, min.features = 200)
+
+  ac_seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(ac_seurat_obj, pattern = "MT-")
+ 
+ # Plots before filtering
+  #print(Seurat::VlnPlot(ac_seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3))
+# print(Seurat::FeatureScatter(ac_seurat_obj, feature1 = "nCount_RNA", feature2  = "nFeature_RNA"))
+ 
+  lb <- quantile(ac_seurat_obj[["nFeature_RNA"]]$nFeature_RNA, probs = 0.04)
+  ub <- quantile(ac_seurat_obj[["nFeature_RNA"]]$nFeature_RNA, probs = 0.96) # filtering features using quantile
+
+  #filering upper quantile, lower quantile and mt genes
+ 
+ ac_seurat_obj <- ac_seurat_obj[, ac_seurat_obj[["nFeature_RNA"]] > lb &
+                                    ac_seurat_obj[["nFeature_RNA"]] < 7000 &
+                                     ac_seurat_obj[["nCount_RNA"]] < 40000 &
+                                     ac_seurat_obj[["percent.mt"]] < 70]
+
+  # Plots after filtering
+#print(Seurat::VlnPlot(ac_seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3))
+ #print(Seurat::FeatureScatter(ac_seurat_obj, feature1 = "nCount_RNA", feature2  = "nFeature_RNA"))
+
+
+ # putting all seurat objects in a list
+ac_seurat_objects[[length(ac_seurat_objects) + 1]] <- ac_seurat_obj
+}
+```
+
+
+
+```{r pre_processing_healthy}
+
+nt_file_names <- c( "GSE197177_RAW/Case2_ZC")
+
+#Define a list to store Seurat objects
+nt_seurat_objects <- list()
+
+# Create and set up Seurat objects
+for (file_name in nt_file_names) {
+  data <- Seurat::Read10X(data.dir = file_name)
+  nt_seurat_obj <- Seurat::CreateSeuratObject(data, project = file_name, min.cells = 3, min.features = 200)
+
+  nt_seurat_obj[["percent.mt"]] <- Seurat::PercentageFeatureSet(nt_seurat_obj, pattern = "MT-")
+ 
+ # Plots before filtering
+ # print(Seurat::VlnPlot(nt_seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3))
+ # print(Seurat::FeatureScatter(nt_seurat_obj, feature1 = "nCount_RNA", feature2  = "nFeature_RNA"))
+ 
+  lb <- quantile(nt_seurat_obj[["nFeature_RNA"]]$nFeature_RNA, probs = 0.06)
+  ub <- quantile(nt_seurat_obj[["nFeature_RNA"]]$nFeature_RNA, probs = 0.96) # filtering features using quantile
+  lb_rna <- quantile(nt_seurat_obj[["nCount_RNA"]]$nCount_RNA, probs = 0.06)
+  #filering upper quantile, lower quantile and mt genes
+ 
+nt_seurat_obj <- nt_seurat_obj[, nt_seurat_obj[["nFeature_RNA"]] > lb &
+                                    nt_seurat_obj[["nFeature_RNA"]] < 2000 &
+                                    nt_seurat_obj[["nCount_RNA"]] < 4500 &
+                                 nt_seurat_obj[["nCount_RNA"]] > lb_rna &
+                                   nt_seurat_obj[["percent.mt"]] < 15]
+
+  # Plots after filtering
+#print(Seurat::VlnPlot(nt_seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3))
+#print(Seurat::FeatureScatter(nt_seurat_obj, feature1 = "nCount_RNA", feature2  = "nFeature_RNA"))
+
+
+ # putting all seurat objects in a list
+nt_seurat_objects[[length(nt_seurat_objects) + 1]] <- nt_seurat_obj
+}
+```
+
+
+```{r downstream_processing}
+combined_list <- c(ac_seurat_objects, nt_seurat_objects)
+
+# Merge all seurat objects
+merged_ac <- merge(x = combined_list[[1]], 
+                    y = combined_list[2:length(combined_list)], 
+                    merge.data = TRUE)
+
+
+# Integrating SC Transformed data
+merged_ac<- SCTransform(object = merged_ac, verbose = FALSE)
+merged_ac <- RunPCA(merged_ac, verbose = FALSE)
+
+merged_ac  <- IntegrateLayers(object  =merged_ac , method = HarmonyIntegration,
+  orig.reduction = "pca", new.reduction = 'harmony',
+  assay = "SCT", verbose = FALSE)
+
+# Dimentionality reduction
+merged_ac <- FindNeighbors(object = merged_ac, reduction = "harmony",verbose = FALSE)
+merged_ac<- FindClusters(merged_ac, resolution = c(0.2),verbose = FALSE)
+
+merged_ac  <- RunUMAP(merged_ac  , reduction = "harmony", assay = "SCT", dims = 1:50, verbose = FALSE)
+
+merged_ac  <- RunTSNE(merged_ac , reduction = "harmony", assay = "SCT", dims = 1:50, verbose = FALSE)
+
+```
+
+
+
+```{r }
+DimPlot(merged_ac, reduction = "umap",label = TRUE)
+
+```
+
+```{r fig.width=15, fig.height=5}
+DotPlot(merged_ac, features = c("FKBP11","MZB1","SSR4","IGHA1", #Plasma Cell
+                                "LY9","MS4A1","CD79A","BANK1","TNFRSF13C", #B Cell
+                                "CD69","MS4A2","TPSB2","CLU", #MAST CELL
+                                "CD68","APOE","CCL2","S100A8","S100A9", "CXCL1","AIF1","CD74", #MAC/MONO
+                                "PECAM1","PLVAP", #Endothelial Cells,
+                                "COL3A1","ACTA2","LUM","COL1A1","DCN","COL1A2", #FIBROBLAST
+                                "GZMA","GZMB","CD3D","CD3E","CCL5","SLC30A1","NKG7", #NK
+                                "CD4","CD8A","CD3",
+                                "IL7R","IL2RA","TRAC",
+                                "CEACAM6","EPCAM","MUC1","KRT19",#ductal cells
+                                "CPA1","CELA3B","CELA3A", #ACINAR
+                                "LYZ", #ENDOCRINE
+                                "ADGRE1"
+                                
+                                ),cols = c("blue","green"))+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+```{r}
+c("Ductal Cell",#0
+  "",#1
+  "Ductal Cell",#2
+  "Mac/Mono",#3
+  "Fibroblast",#4
+  "",#5
+  "",#6
+  "",#7
+  "B/Plasma Cell",#8
+  "Mast Cell"#9)
+```
+
+```{r}
+merged_ac <- PrepSCTFindMarkers(merged_ac)
+markers <- FindAllMarkers(merged_ac, only.pos = TRUE)
+
+markers %>% top_n(n = 15)
+```
+
+```{r}
+saveRDS(merged_ac,"merged_ac.rds")
+```
+
+
+```{r}
+merged_ac <- readRDS("merged_ac.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
