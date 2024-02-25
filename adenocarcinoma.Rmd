@@ -9,6 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+#### Aim: To decode the Genetic Landscape of Pancreatic Cancer and its Liver Metastases
+
 ```{r loading_all_libraries}
 library(Seurat); library(tidyverse); library(ggplot2)
 ```
@@ -18,8 +21,6 @@ ZC: normal pancreatic tissue
 YF: pancreatic tumors
 ZY: hepatic metastases
 
-
-MERGING GSE152048 and GSE162454
 
 ```{r pre_processing_injured}
 
@@ -135,11 +136,46 @@ merged_ac  <- RunTSNE(merged_ac , reduction = "harmony", assay = "SCT", dims = 1
 ```
 
 
-
 ```{r }
 DimPlot(merged_ac, reduction = "umap",label = TRUE)
-
 ```
+
+```{r}
+head(merged_ac@meta.data)
+```
+
+Adding metadata
+
+```{r}
+# sample code
+merged_ac@meta.data <- merged_ac@meta.data %>%
+  mutate(Sample_code = str_extract(orig.ident, "(?<=_)[A-Z]+$"))
+
+# sample description
+
+merged_ac@meta.data <- merged_ac@meta.data %>%
+  mutate(Sample = case_when(
+   Sample_code == "YF" ~ "pancreatic tumor",
+    Sample_code == "ZC" ~ "normal pancreatic tissue",
+    Sample_code == "ZY" ~ "hepatic metastases",
+    TRUE ~ NA_character_ # Default case if none of the above conditions are met
+  ))
+```
+
+
+```{r}
+table(merged_ac$Sample_code)
+table(merged_ac$Sample)
+```
+
+```{r }
+# Identifying top cluster specific differentially expressed markers markers
+
+merged_ac <- PrepSCTFindMarkers(merged_ac)
+markers <- FindAllMarkers(merged_ac, only.pos = TRUE)
+markers %>% top_n(n = 15)
+```
+
 
 ```{r fig.width=15, fig.height=5}
 DotPlot(merged_ac, features = c("FKBP11","MZB1","SSR4","IGHA1", #Plasma Cell
@@ -154,36 +190,59 @@ DotPlot(merged_ac, features = c("FKBP11","MZB1","SSR4","IGHA1", #Plasma Cell
                                 "CEACAM6","EPCAM","MUC1","KRT19",#ductal cells
                                 "CPA1","CELA3B","CELA3A", #ACINAR
                                 "LYZ", #ENDOCRINE
-                                "ADGRE1"
-                                
-                                ),cols = c("blue","green"))+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+                                "ADGRE1")
+                                ,cols = c("blue","green"))+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
+
+Naming clusters 
+
 ```{r}
-c("Ductal Cell",#0
-  "",#1
+
+new.cluster.ids <-c(
+  "Acinar/Endocrine Cell", #0
+  "T Cell",#1
   "Ductal Cell",#2
   "Mac/Mono",#3
   "Fibroblast",#4
-  "",#5
-  "",#6
-  "",#7
+  "NK Cell",#5
+  "Mac/Mono",#6
+  "T Cell",#7
   "B/Plasma Cell",#8
-  "Mast Cell"#9)
+  "Mast Cell" #9
+  )
+  
+names(new.cluster.ids) <- levels(merged_ac)
+merged_ac <- RenameIdents(merged_ac, new.cluster.ids)
+DimPlot(merged_ac, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
 ```
+umap by groups
 
 ```{r}
-merged_ac <- PrepSCTFindMarkers(merged_ac)
-markers <- FindAllMarkers(merged_ac, only.pos = TRUE)
-
-markers %>% top_n(n = 15)
+DimPlot(merged_ac, reduction = "umap", label = FALSE, pt.size = 0.5, group.by = "Sample")
 ```
 
+CELL SIGNALINGAND CELL COMMUNIVCATION ANALYSIS BY CELL CHAT
+
 ```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r saving_and_reading}
 saveRDS(merged_ac,"merged_ac.rds")
-```
-
-
-```{r}
 merged_ac <- readRDS("merged_ac.rds")
 ```
 
