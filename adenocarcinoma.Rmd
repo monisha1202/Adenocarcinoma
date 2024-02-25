@@ -217,28 +217,67 @@ DimPlot(merged_ac, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
 ```
 umap by groups
 
-```{r}
-DimPlot(merged_ac, reduction = "umap", label = FALSE, pt.size = 0.5, group.by = "Sample")
+```{r fig.width = 12, fig.height=4}
+DimPlot(merged_ac, reduction = "umap", label = FALSE, pt.size = 0.5)  |
+  DimPlot(merged_ac, reduction = "umap", label = FALSE, pt.size = 0.5, group.by = "Sample")
+
 ```
 
 CELL SIGNALINGAND CELL COMMUNIVCATION ANALYSIS BY CELL CHAT
 
 ```{r}
-
+# Create cellchat object
+cellchat <- createCellChat(object = merged_ac, group.by = "ident", assay = "RNA")
 ```
 
 
+```{r}
+CellChatDB <- CellChatDB.human # use CellChatDB.mouse if running on mouse data
+showDatabaseCategory(CellChatDB)
+
+# use a subset of CellChatDB for cell-cell communication analysis
+# CellChatDB.use <- subsetDB(CellChatDB, search = "Secreted Signaling") # use Secreted Signaling
+# use all CellChatDB for cell-cell communication analysis
+CellChatDB.use <- CellChatDB # simply use the default CellChatDB
+
+# set the used database in the object
+cellchat@DB <- CellChatDB.use
+
+cellchat <- subsetData(cellchat) # subset the expression data of signaling genes for saving computation cost
+future::plan("multiprocess", workers = 4) # do parallel
+```
+
+Computing the communication probability and infer cellular communication network
+
+```{r}
+cellchat <- identifyOverExpressedGenes(cellchat)
+cellchat <- identifyOverExpressedInteractions(cellchat)
+cellchat <- projectData(cellchat, PPI.human)
+
+cellchat <- computeCommunProb(cellchat, raw.use = TRUE)
+# Filter out the cell-cell communication if there are only few number of cells in certain cell groups
+cellchat <- filterCommunication(cellchat, min.cells = 10)
+
+cellchat <- computeCommunProbPathway(cellchat)
+
+cellchat <- aggregateNet(cellchat)
+
+groupSize <- as.numeric(table(cellchat@idents))
+par(mfrow = c(1,2), xpd=TRUE)
+netVisual_circle(cellchat@net$count, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Number of interactions")
+netVisual_circle(cellchat@net$weight, vertex.weight = groupSize, weight.scale = T, label.edge= F, title.name = "Interaction weights/strength")
+```
 
 
-
-
-
-
-
-
-
-
-
+```{r}
+mat <- cellchat@net$weight
+for (i in 1:nrow(mat)) {  
+  mat2 <- matrix(0, nrow = nrow(mat), 
+                 ncol = ncol(mat), 
+                 dimnames = dimnames(mat))  
+  mat2[i, ] <- mat[i, ]  
+  netVisual_circle(mat2, vertex.weight = groupSize, weight.scale = T, edge.weight.max = max(mat), title.name = rownames(mat)[i])}
+```
 
 
 ```{r saving_and_reading}
