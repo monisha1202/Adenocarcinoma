@@ -17,3 +17,7 @@ Dataset used:  NCBI GEO GSE197177 ( https://www.ncbi.nlm.nih.gov/geo/query/acc.c
 
 ### Cell-specific marker expression
 ![image](https://github.com/monisha1202/Decoding-the-Genetic-Landscape-of-Pancreatic-Canc-and-its-Liver-Metastase/assets/80122345/af46b218-31b6-4a08-880c-c7bf6aa9bbc8)
+
+
+### Chord diagram displaying the relationship of cell types annotated in the integrated cell map in each sample groups and all samples as a whole. The width of the line represents the proportion of cell types.
+![image](https://github.com/monisha1202/Decoding-the-Genetic-Landscape-of-Pancreatic-Canc-and-its-Liver-Metastase/assets/80122345/5bfdb43e-df99-4589-92dc-13cb5f6a2d75)
